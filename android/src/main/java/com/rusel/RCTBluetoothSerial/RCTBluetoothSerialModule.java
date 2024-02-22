@@ -52,6 +52,7 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule impleme
     private ReactApplicationContext mReactContext;
 
     private StringBuffer mBuffer = new StringBuffer();
+    private BluetoothDevice gDevice;
 
     // Promises
     private Promise mEnabledPromise;
@@ -324,9 +325,9 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule impleme
     public void connect(String id, Promise promise) {
         mConnectedPromise = promise;
         if (mBluetoothAdapter != null) {
-            BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(id);
-            if (device != null) {
-                mBluetoothService.connect(device);
+            gDevice = mBluetoothAdapter.getRemoteDevice(id);
+            if (gDevice != null) {
+                mBluetoothService.connect(gDevice);
             } else {
                 promise.reject(new Exception("Could not connect to " + id));
             }
@@ -383,13 +384,7 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule impleme
 
     @ReactMethod
     public void readUntilDelimiter(String delimiter, Promise promise) {
-        String data = "";
-        int index = mBuffer.indexOf(delimiter, 0);
-        if (index > -1) {
-            data = mBuffer.substring(0, index + delimiter.length());
-            mBuffer.delete(0, index + delimiter.length());
-        }
-        promise.resolve(data);
+        promise.resolve(readUntil(delimiter));
     }
 
 
@@ -482,9 +477,30 @@ public class RCTBluetoothSerialModule extends ReactContextBaseJavaModule impleme
      * @param data Message
      */
     void onData (String data) {
-        WritableMap params = Arguments.createMap();
-        params.putString("data", data);
-        sendEvent(DEVICE_READ, params);
+        String deviceName = gDevice.getName();
+        if (deviceName.contains("CS3070")) {
+            mBuffer.append(data);
+            String completeData = readUntil(this.delimiter);
+            if (completeData != null && completeData.length() > 0) {
+                WritableMap params = Arguments.createMap();
+                params.putString("data", completeData);
+                sendEvent(DEVICE_READ, params);
+            }
+        } else {
+            WritableMap params = Arguments.createMap();
+            params.putString("data", data);
+            sendEvent(DEVICE_READ, params);
+        }
+    }
+
+    private String readUntil(String delimiter) {
+        String data = "";
+        int index = mBuffer.indexOf(delimiter, 0);
+        if (index > -1) {
+            data = mBuffer.substring(0, index + delimiter.length());
+            mBuffer.delete(0, index + delimiter.length());
+        }
+        return data;
     }
 
     /*********************/
